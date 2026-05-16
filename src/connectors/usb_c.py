@@ -8,7 +8,7 @@ class USB_C_Port(BasePartObject):
 
     def __init__(
         self,
-        parameters: Parameters = None,
+        parameters = None,
         mode: Mode = Mode.ADD,
         **kwargs
     ):
@@ -32,14 +32,19 @@ class USB_C_Port(BasePartObject):
             amount=p.size.Y
         )
         if mode == Mode.SUBTRACT:
-            cutout_sketch = RectangleRounded(
-                width=p.cut_size.X,
-                height=p.cut_size.Z,
-                radius=p.cut_radius
+            port += Box(
+                length=p.size.X,
+                width=p.size.Y,
+                height=p.size.Z/2,
+                align=(Align.CENTER, Align.MAX, Align.MIN)
             )
-            cutout = location * extrude(
-                to_extrude=cutout_sketch,
-                amount=-p.cut_size.Y
+            cutout = Pos(Z=p.size.Z/2) * Box(
+                *p.cut_size,
+                align=(Align.CENTER, Align.MIN, Align.CENTER)
+            )
+            cutout = fillet(
+                objects=cutout.edges().filter_by(Axis.Y).group_by(Axis.Z)[-1],
+                radius=p.cut_radius
             )
             cutout.color = ("Yellow", 0.3)
             cutout.label = "Cutout"
@@ -92,5 +97,5 @@ class Parameters:
 if __name__ == "__main__":
     from ocp_vscode import show
     show(USB_C_Port(
-        # mode=Mode.SUBTRACT
+        mode=Mode.SUBTRACT
     ))
