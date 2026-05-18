@@ -44,14 +44,6 @@ class USB_C_Port(BasePartObject):
             radius=radius
         )
         if mode == Mode.SUBTRACT:
-            if p.squared:
-                port += Box(
-                    *p.size * (1, 1, 0.5),
-                    # length=p.size.X,
-                    # width=p.size.Y,
-                    # height=p.size.Z/2,
-                    align=(Align.CENTER, Align.MAX, Align.MIN)
-                )
             cutout_location = Location(port.faces().sort_by(Axis.Y)[-1].center())
             cutout = cutout_location * Box(
                 *p.cut_size,
@@ -85,15 +77,6 @@ class USB_C_Port(BasePartObject):
                 objects=tongue.edges().filter_by(Axis.Y),
                 radius=p.tongue_radius
             )
-            # tongue_sketch = RectangleRounded(
-            #     width=p.tongue_size.X,
-            #     height=p.tongue_size.Z,
-            #     radius=p.tongue_radius
-            # )
-            # tongue = tongue_locations.locations[0] * extrude(
-            #     to_extrude=tongue_sketch,
-            #     amount=p.tongue_size.Y
-            # )
             tongue.color = "Black"
             tongue.label = "Tongue"
             assembly = Part(children=[port, tongue])
@@ -122,5 +105,5 @@ class Parameters:
 if __name__ == "__main__":
     from ocp_vscode import show
     show(USB_C_Port(
-        # mode=Mode.SUBTRACT
+        mode=Mode.SUBTRACT
     ))
