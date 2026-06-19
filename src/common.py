@@ -20,17 +20,6 @@ EPS = 1*UM
 VECTOR_MAX_LENGTH = 4
 vector = [tuple[[float]*i] for i in range(1, VECTOR_MAX_LENGTH+1)]
 
-ColorLike: typing.TypeAlias = (
-    str
-    | tuple[str, float | int]
-    | tuple[float | int, float | int, float | int]
-    | tuple[ float | int, float | int, float | int, float | int ]
-    | int
-    | tuple[int, int]
-    | Color
-    # | Quantity_ColorRGBA
-)
-
 # Alignment Constants
 LEFT_FRONT_BOTTOM  = (Align.MIN,    Align.MIN,    Align.MIN)
 LEFT_FRONT         = (Align.MIN,    Align.MIN,    Align.CENTER)
