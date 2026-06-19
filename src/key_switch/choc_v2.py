@@ -3,18 +3,10 @@ from dataclasses import dataclass
 
 from build123d import *
 
-BIG = 1000
-
-ColorLike: typing.TypeAlias = (
-    str
-    | tuple[str, float | int]
-    | tuple[float | int, float | int, float | int]
-    | tuple[ float | int, float | int, float | int, float | int ]
-    | int
-    | tuple[int, int]
-    | Color
-    # | Quantity_ColorRGBA
-)
+try:
+    from bd_keyboard.src.common import *
+except ImportError:
+    from common import *
 
 class ChocV2(BasePartObject):
     """Kailh Choc V2 (CPG1353) key switch."""

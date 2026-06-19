@@ -3,19 +3,35 @@ from dataclasses import dataclass
 
 from build123d import *
 
+try:
+    from bd_keyboard.src.common import *
+except ImportError:
+    from common import *
+
+@dataclass
+class USB_C_Parameters:
+    color = "Silver"
+    clearance = 0.5
+    cut_size = Vector(12, 100, 7)
+    cut_radius = 3
+    inside_depth = 6.2
+    radius = 1.2
+    size = Vector(9, 7.35, 3.3)
+    squared = False
+    thickness = 0.3
+    tongue_size = Vector(6.690, 4.45, 1.2)
+    tongue_radius = 0.4
+
 class USB_C_Port(BasePartObject):
     """USB-C Port."""
 
     def __init__(
         self,
-        parameters = None,
+        parameters: USB_C_Parameters = USB_C_Parameters(),
         mode: Mode = Mode.ADD,
         **kwargs
     ):
-        if parameters is None:
-            self.parameters = Parameters()
-        else:
-            self.parameters = parameters
+        self.parameters = parameters
         self.mode = mode
         p = self.parameters
         location = Location(
@@ -88,22 +104,8 @@ class USB_C_Port(BasePartObject):
         self.color = p.color
         self.label = "USB-C Port"
 
-@dataclass
-class Parameters:
-    color = "Silver"
-    clearance = 0.5
-    cut_size = Vector(12, 100, 7)
-    cut_radius = 3
-    inside_depth = 6.2
-    radius = 1.2
-    size = Vector(9, 7.35, 3.3)
-    squared = False
-    thickness = 0.3
-    tongue_size = Vector(6.690, 4.45, 1.2)
-    tongue_radius = 0.4
-
 if __name__ == "__main__":
     from ocp_vscode import show
     show(USB_C_Port(
-        mode=Mode.SUBTRACT
+        # mode=Mode.SUBTRACT
     ))
