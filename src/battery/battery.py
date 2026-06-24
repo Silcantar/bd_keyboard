@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+# from dataclasses import dataclass
 
 from build123d import *
 
@@ -7,32 +7,22 @@ try:
 except ImportError:
     from common import *
 
-@dataclass
-class BatteryParameters:
-    color: ColorLike = "Silver"
-    fillet_radius: float = 1
-    size: vector[3] = (34, 50, 4)
-
 class Battery(Part):
-    """Standard lithium-polymer battery."""
+    """Standard lithium-polymer battery. Default size is 403450."""
     def __init__(
         self,
-        parameters: BatteryParameters = BatteryParameters(),
+        size: vector[3] = (34, 50, 4),
+        fillet_radius: float = 1,
+        color: ColorLike = "Silver",
         label: str = None,
         **kwargs
     ):
-        self.parameters = parameters
-        p = self.parameters
         if label is None:
-            label = f"LiPo Battery {10*p.size[Z]}{p.size[X]}{p.size[Y]}"
-        try:
-            color
-        except NameError:
-            color = self.parameters.color
-        battery = Box(*self.parameters.size)
+            label = f"LiPo Battery {10*size[Z]}{size[X]}{size[Y]}"
+        battery = Box(*size)
         battery = fillet(
             objects=battery.edges().filter_by(Axis.Y),
-            radius=p.fillet_radius
+            radius=fillet_radius
             )
         super().__init__(
             obj=battery,
