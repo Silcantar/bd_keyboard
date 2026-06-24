@@ -10,36 +10,35 @@ except ImportError:
 
 @dataclass
 class USB_C_Parameters:
-    color = "Silver"
-    clearance = 0.5
-    cut_size = Vector(12, 100, 7)
-    cut_radius = 3
-    inside_depth = 6.2
-    radius = 1.2
-    size = Vector(9, 7.35, 3.3)
-    squared = False
-    thickness = 0.3
-    tongue_size = Vector(6.690, 4.45, 1.2)
-    tongue_radius = 0.4
+    color: ColorLike = "Silver"
+    clearance: float = 0.5
+    cut_size: vector[3] = (12, 100, 7)
+    cut_radius: float = 3
+    inside_depth: float = 6.2
+    radius: float = 1.2
+    size: vector[3] = (9, 7.35, 3.3)
+    squared: bool = False
+    thickness: float = 0.3
+    tongue_size: vector[3] = (6.690, 4.45, 1.2)
+    tongue_radius: float = 0.4
 
-class USB_C_Port(BasePartObject):
+class USB_C_Port(Part):
     """USB-C Port."""
 
     def __init__(
         self,
         parameters: USB_C_Parameters = USB_C_Parameters(),
         mode: Mode = Mode.ADD,
+        label: str = "USB-C Port",
         **kwargs
     ):
         self.parameters = parameters
         self.mode = mode
         p = self.parameters
         location = Location(
-            position=(0, 0, p.size.Z/2),
+            position=(0, 0, p.size[Z]/2),
             orientation=(90, 0, 0)
         )
-        size = p.size
-        radius = p.radius
         fillet_edges = lambda p: p.edges().filter_by(Axis.Y)
         if mode == Mode.SUBTRACT:
             size = p.size + (2*p.clearance, 0, 2*p.clearance)
@@ -52,18 +51,18 @@ class USB_C_Port(BasePartObject):
                     .group_by(Axis.Z)[-1]
                 )
         port = Box(
-            *size,
-            align=(Align.CENTER, Align.MAX, Align.MIN)
+            *p.size,
+            align=BACK_BOTTOM
         )
         port = fillet(
             objects=fillet_edges(port),
-            radius=radius
+            radius=p.radius
         )
         if mode == Mode.SUBTRACT:
             cutout_location = Location(port.faces().sort_by(Axis.Y)[-1].center())
             cutout = cutout_location * Box(
                 *p.cut_size,
-                align=(Align.CENTER, Align.MIN, Align.CENTER)
+                align=FRONT
             )
             cutout = fillet(
                 objects=fillet_edges(cutout),
@@ -73,7 +72,11 @@ class USB_C_Port(BasePartObject):
             cutout.label = "Cutout"
             assembly = Part(children=[port, cutout])
         else:
-            inside_location = Pos(0, p.size.Y - p.thickness - p.inside_depth, 0)
+            inside_location = Pos(
+                0,
+                p.size[Y] - p.thickness - p.inside_depth,
+                0
+                )
             inside = inside_location * offset(
                 objects=port,
                 amount=-p.thickness
@@ -87,7 +90,7 @@ class USB_C_Port(BasePartObject):
             )
             tongue = tongue_location * Box(
                 *p.tongue_size,
-                align=(Align.CENTER, Align.MIN, Align.CENTER)
+                align=FRONT
             )
             tongue = fillet(
                 objects=tongue.edges().filter_by(Axis.Y),
@@ -97,15 +100,32 @@ class USB_C_Port(BasePartObject):
             tongue.label = "Tongue"
             assembly = Part(children=[port, tongue])
         super().__init__(
-            part=assembly,
-            mode=mode,
+            obj=assembly,
+            label=label,
+            color=p.color,
             **kwargs
-        )
-        self.color = p.color
-        self.label = "USB-C Port"
+            )
+        RigidJoint(
+            label="pcb",
+            to_part=self,
+            joint_location=Pos(
+                port.edges()
+                .group_by(Axis.Z)[0]
+                .sort_by(Axis.Y)[-1]
+                .center()
+                )
+            )
+        RigidJoint(
+            label="plug",
+            to_part=self,
+            joint_location=Pos(port.faces().sort_by(Axis.Y)[-1].center())
+            )
 
 if __name__ == "__main__":
     from ocp_vscode import show
-    show(USB_C_Port(
-        # mode=Mode.SUBTRACT
-    ))
+    show(
+        USB_C_Port(
+            # mode=Mode.SUBTRACT
+            ),
+        render_joints=True
+        )

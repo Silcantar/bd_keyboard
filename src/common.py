@@ -1,6 +1,8 @@
 from build123d import Align, Color
 
 # Constants for indexing components of vectors.
+R = 0
+H = 1
 X = 0
 Y = 1
 Z = 2

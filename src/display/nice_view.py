@@ -22,7 +22,7 @@ class NiceViewParameters:
     position: float = 3
     size: vector[3] = (13.8, 29.35, 0.9)
 
-class NiceView(BasePartObject):
+class NiceView(Part):
     """OLED/LCD/ePaper display like Nice!View or similar."""
     def __init__(
         self,
@@ -31,10 +31,6 @@ class NiceView(BasePartObject):
         **kwargs
     ):
         self.parameters = parameters
-        super().__init__(part=self._build(), **kwargs)
-        self.label = label
-
-    def _build(self) -> Part:
         p = self.parameters
         children: list[Part] = []
         pcb_location = Pos(Z=-p.size[Z])
@@ -121,9 +117,28 @@ class NiceView(BasePartObject):
         chip.label = "Chips Placeholder"
         chip.color = p.color
         children.append(chip)
-        return Compound(children=children)
+        super().__init__(
+            children=children,
+            label=label,
+            **kwargs
+            )
+        RigidJoint(
+            label="front",
+            to_part=self,
+            joint_location=Pos(display.faces().sort_by(Axis.Z)[-1].center())
+            )
+        RigidJoint(
+            label="back",
+            to_part=self,
+            joint_location=Pos(chip.faces().sort_by(Axis.Z)[0].center())
+            )
+        RigidJoint(
+            label="header",
+            to_part=self,
+            joint_location=hole_locations[2]*Pos(Z=-p.pcb_size[Z])
+            )
 
 
 if __name__ == "__main__":
     from ocp_vscode import show
-    show(NiceView())
+    show(NiceView(), render_joints=True)
