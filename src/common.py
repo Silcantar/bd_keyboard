@@ -1,26 +1,23 @@
-from build123d import Align, Color
+from enum import IntEnum, auto
+from math import cos, sin, tan, acos, asin, atan, radians, degrees
+
+from build123d import *#Align, Color
 
 # Constants for indexing components of vectors.
-R = 0
-H = 1
+R = 0       # Cylinder Radius
+H = L = 1   # Cylinder Height/Length
 X = 0
 Y = 1
 Z = 2
 
-# Unit Conversion constants.
-MICRON = UM = 0.001
-MILLIMETER = MM = 1
-METER = M = 1000
-INCH = IN = 25.4
-FOOT = FT = 304.8
-
 # Very big and very small length constants.
 BIG = 10*M
-EPS = 1*UM
+EPS = 1*MC
 
 # Type alias for vectors (tuples of floats) of various lengths.
-VECTOR_MAX_LENGTH = 4
+VECTOR_MAX_LENGTH = 6
 vector = [tuple[[float]*i] for i in range(1, VECTOR_MAX_LENGTH+1)]
+color = str | int | tuple[int | str, float | int]
 
 # Alignment Constants
 LEFT_FRONT_BOTTOM  = (Align.MIN,    Align.MIN,    Align.MIN)
@@ -51,3 +48,24 @@ RIGHT_BACK_BOTTOM  = (Align.MAX,    Align.MAX,    Align.MIN)
 RIGHT_BACK         = (Align.MAX,    Align.MAX,    Align.CENTER)
 RIGHT_BACK_TOP     = (Align.MAX,    Align.MAX,    Align.MAX)
 
+def cosd(angle: float) -> float:
+    return cos(radians(angle))
+
+def sind(angle: float) -> float:
+    return sin(radians(angle))
+
+def tand(angle: float) -> float:
+    return tan(radians(angle))
+
+def acosd(x: float) -> float:
+    return degrees(acos(x))
+
+def asind(x: float) -> float:
+    return degrees(asin(x))
+
+def atand(x: float) -> float:
+    return degrees(atan(x))
+
+class StemType(IntEnum):
+    CHOC = auto()
+    MX = auto()
