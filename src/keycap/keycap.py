@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+import os.path
+from dataclasses import dataclass, field
+from enum import IntFlag, auto
 
 from build123d import *
 from dataclass_wizard import YAMLWizard
@@ -8,45 +10,57 @@ try:
 except ImportError:
     from common import *
 
-@dataclass
-class Skirt:
-    bottom_fillet_radius: float = 0.5
-    fillet_radii: vector[2] = (2, 6)
-    height: float = 1
-    thickness: float = 2
+class StemType(IntFlag):
+    DEFAULT = 0 # MX with no ribs.
+    CHOC = auto()
+    RIBBED = auto()
 
 @dataclass
-class Stem:
-    stem_type: StemType = StemType.MX
+class Skirt:
+    bottom_fillet_radius: float
+    fillet_radii: vector[2]
+    height: float
+    thickness: float
 
 @dataclass
 class Top:
-    angles: vector[2] = (5, 0)
-    dish_radius: float = 30
-    fillet_radius: float = 2
-    inside_fillet_radius: float = 0.5
-    offset: vector[2] = (0, 1)
-    size: vector[2] = 15, 15
-    spline_points: tuple[vector[2]] = (
-        (-0.5, 0.2),
-        (-0.4, 0.3),
-        (0, 0),
-        (0.4, 0.3),
-        (0.5, 0.2)
-        )
-    spline_tangents: tuple[float] = (30, 0, 0, 0, -30)
-    spline_scalars: tuple[float] = (1, 1, 2, 1, 1)
-    thickness: float = 2
+    angles: vector[2]
+    dish_radius: float
+    fillet_radius: float
+    inside_fillet_radius: float
+    offset: vector[2]
+    size: vector[2]
+    spline_points: list[vector[2]]
+    spline_tangents: list[float]
+    spline_scalars: list[float]
+    thickness: float
 
+@dataclass
 class KeycapParameters(YAMLWizard):
-    color: color = "CornflowerBlue"
-    height: float = 6
-    label: str = "Keycap"
-    material: str = "PBT"
-    size: vector[2] = (18, 18)
-    Skirt: Skirt = Skirt()
-    Stem: Stem = Stem()
-    Top: Top = Top()
+    color: str
+    height: float
+    label: str
+    material: str
+    size: vector[2]
+    stem_type: StemType
+    Skirt: Skirt
+    Top: Top
+
+@dataclass
+class StemMX:
+    chamfer_width: float = 0.2
+    depth: float = 3.6
+    radius: float = 2.7
+    rib_thickness: float = 1
+    size: vector[2] = (4, 1.3)
+
+@dataclass
+class StemChoc:
+    boss_size: vector[2] = (0, 0)
+    height: float = 0
+    spacing: float = 0
+    size: vector[2] = (0, 0)
+
 
 class Keycap(BasePartObject):
     """Parametric keycap model."""
@@ -55,10 +69,23 @@ class Keycap(BasePartObject):
         self,
         color: color = None,
         label: str = None,
-        parameters: KeycapParameters = KeycapParameters(),
+        parameters: KeycapParameters = None,
         **kwargs
         ):
-        self.parameters = p = parameters
+        if parameters is None:
+            parameter_file = os.path.join(
+                os.path.dirname(__file__),
+                "assets",
+                "default.yaml"
+                )
+            self.parameters = KeycapParameters.from_yaml_file(parameter_file)
+        else:
+            self.parameters = parameters
+        self.parameters.Stem = (
+            StemChoc() if StemType.CHOC in self.parameters.stem_type
+            else StemMX()
+            )
+        p = self.parameters
         super().__init__(
             part=self._build(),
             **kwargs
@@ -88,6 +115,11 @@ class Keycap(BasePartObject):
                 ),
             radius=p.Top.inside_fillet_radius
             )
+        if StemType.CHOC in p.stem_type:
+            keycap += self._stem_choc()
+        else:
+            keycap += self._stem_MX()
+            keycap = keycap.clean()
         return keycap
 
     def _top(self, inside: bool = False) -> Part:
@@ -148,17 +180,72 @@ class Keycap(BasePartObject):
                 .filter_by(GeomType.REVOLUTION)
                 .sort_by(Axis.Z)[-1]
                 )
-            bottom_inside_profile = RectangleRounded(
-                *(dim - 2*p.Skirt.thickness for dim in p.size),
-                radius=max(p.Skirt.fillet_radii[0] - p.Skirt.thickness, EPS)
+            bottom_inside_profile = (
+                Pos(Z=p.Skirt.height)
+                * RectangleRounded(
+                    *(dim - 2*p.Skirt.thickness for dim in p.size),
+                    radius=max(
+                        p.Skirt.fillet_radii[0] - p.Skirt.thickness,
+                        EPS
+                        )
+                    )
                 )
             skirt_inside = loft([top_inside_profile, bottom_inside_profile])
             skirt -= skirt_inside
         return skirt
 
 
-    def _stem(self) -> Part:
+    def _stem_choc(self) -> Part:
         p = self.parameters
+        raise NotImplementedError("Choc stem not implemented yet.")
+
+    def _stem_MX(self) -> Part:
+        p = self.parameters
+        stem = Cylinder(
+            radius=p.Stem.radius,
+            height=p.height,
+            align=BOTTOM
+            )
+        if StemType.RIBBED in p.stem_type:
+            stem += [
+                Pos(Z=p.Stem.depth)
+                * Rot(Z=i*90)
+                * Box(
+                    length=BIG,
+                    width=p.Stem.rib_thickness,
+                    height=p.height - p.Stem.depth,
+                    align=BOTTOM
+                    )
+                for i in range(2)
+                ]
+        stem -= [
+            Rot(Z=i*90)
+            * Box(
+                *p.Stem.size,
+                height=p.Stem.depth,
+                align=BOTTOM
+                )
+            for i in range(2)
+            ]
+        stem = chamfer(
+            objects=(
+                stem
+                .faces()
+                .sort_by(Axis.Z)[0]
+                .edges()
+                .filter_by(GeomType.LINE)
+                ),
+            length=p.Stem.chamfer_width
+            )
+        stem &= (
+            Pos(Z=-2*EPS) * self._skirt(solid=True)
+            + Cylinder(
+                radius=p.Stem.radius,
+                height=p.Skirt.height,
+                align=BOTTOM
+                )
+            )
+        return stem
 
 
 if __name__ == "__main__":

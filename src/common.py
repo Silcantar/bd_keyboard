@@ -16,7 +16,15 @@ EPS = 1*MC
 
 # Type alias for vectors (tuples of floats) of various lengths.
 VECTOR_MAX_LENGTH = 6
-vector = [tuple[[float]*i] for i in range(1, VECTOR_MAX_LENGTH+1)]
+vector = [
+    tuple[*[float]*i]
+    for i in range(VECTOR_MAX_LENGTH + 1)
+    ]
+# vector = {
+#     2: tuple[float, float],
+#     3: tuple[float, float, float],
+#     4: tuple[float, float, float, float]
+#     }
 color = str | int | tuple[int | str, float | int]
 
 # Alignment Constants
@@ -65,7 +73,3 @@ def asind(x: float) -> float:
 
 def atand(x: float) -> float:
     return degrees(atan(x))
-
-class StemType(IntEnum):
-    CHOC = auto()
-    MX = auto()
