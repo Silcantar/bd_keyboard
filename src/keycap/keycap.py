@@ -3,7 +3,10 @@ from dataclasses import dataclass, field
 from enum import IntFlag, auto
 
 from build123d import *
-from dataclass_wizard.mixins.yaml import YAMLWizard
+try:
+    from dataclass_wizard import YAMLWizard
+except ImportError:
+    from dataclass_wizard.mixins.yaml import YAMLWizard
 
 try:
     from bd_keyboard.src.common import *
