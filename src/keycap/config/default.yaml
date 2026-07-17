@@ -1,43 +1,55 @@
-# Parameters for BD_Keyboard keycaps.
+# Default Parameters for BD_Keyboard keycaps.
 # Alias definitions
 thickness: &thickness 1
-stem_types:
-  mx: &mx 0
-  choc: &choc 1
-  mx_ribbed: &mx_ribbed 2
-  choc_ribbed: &choc_ribbed 3
+spacing_options:
+  mx: &spacing_mx [19, 19]
+  mx_inch: &spacing_mx_inch [19.05, 19.05]
+  choc: &spacing_choc [18, 17]
+stem_options:
+  mx: &stem_mx 0
+  choc: &stem_choc 1
+  mx_ribbed: &stem_mx_ribbed 2
+  choc_ribbed: &stem_choc_ribbed 3
 # Keycap Parameters
+# Clearance between keycaps.
+clearance: 1
 # Color of the keycap.
 color: "CornflowerBlue"
 # Z-position of the center of the top dish.
-height: 6
+height: 4.6
+height_increments: [2, 0]
 # Label of the keycap when viewed in OCP_VSCode.
 label: Keycap
 # Keycap material for informational purposes.
 material: PBT
 # X- and Y- dimensions of the base of the keycap.
-size: [18, 18]
+spacing: *spacing_mx
 # Type of stem. See stem_types above for options.
-stem_type: *mx
+stem_type: *stem_mx
+
 # The sides of the keycap that extend down from the top.
 Skirt:
+  blended_corner: true
   # Fillet of the inside and outside bottom edges of the skirt.
-  bottom_fillet_radius: 0.3
+  bottom_fillet_radius: 0.2
   # Radius of the corners at the bottom and top of the keycap.
-  fillet_radii: [2, 6]
+  fillet_radii: [1, 6.5]
   # How far above the bottom of the skirt is relative to the bottom of the stem.
   height: 1
+  # Sagitta of the curvature of the skirt sides.
+  sagitta: 1
   # Thickness of the keycap sides.
   thickness: *thickness
 Top:
   # Angles about the X- and Y- axes of the top of the keycap.
   angles: [0, 0]
+  angle_increments: [5, 0]
   # Radius of the left-right (about the Y-axis) curvature of the keycap top.
   dish_radius: 30
   # Radius of the top edges of the keycap.
-  fillet_radius: 1
+  fillet_radius: 0.5
   # Radius of the top inside edge of the keycap.
-  inside_fillet_radius: 0.5
+  inside_fillet_radius: 0
   # Distance that the center of the top of the keycap is offset from the stem
   # in the X- and Y-directions.
   offset: [0, 0]
@@ -49,14 +61,14 @@ Top:
   # defines the height of the point as a fraction of the top thickness (see
   # below.)
   spline_points: [
-    [-0.5, 0.2],
-    [-0.4, 0.3],
-    [0, 0],
-    [0.4, 0.3],
-    [0.5, 0.2]
+    [-0.6, -0.8],
+    [-0.4, -0.2],
+    [0, -0.5],
+    [0.4, -0.2],
+    [0.6, -0.8]
     ]
   # Tangent angles for the spline (see above).
-  spline_tangents: [30, 0, 0, 0, -30]
+  spline_tangents: [45, 0, 0, 0, -45]
   # Weight of each tangent.
   spline_scalars: [1, 1, 2, 1, 1]
   # Thickness of the keycap top.
