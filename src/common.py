@@ -1,8 +1,16 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum, auto
-from math import cos, sin, tan, acos, asin, atan, radians, degrees, sqrt
+from math import (
+    cos, sin, tan,
+    acos, asin, atan,
+    radians, degrees, pi,
+    sqrt,
+    copysign
+    )
 
 from build123d import *
+from build123d.topology.utils import tuplify
 # from build123d.build_commmon import validate_inputs
 
 # Constants for indexing components of vectors.
@@ -79,6 +87,9 @@ def asind(x: float) -> float:
 def atand(x: float) -> float:
     return degrees(atan(x))
 
+def sign(x):
+    return copysign(1, x)
+
 class RectangleBlended(BaseSketchObject):
     """Sketch Object: Rectangle Blended
 
@@ -149,4 +160,56 @@ class RectangleBlended(BaseSketchObject):
                 tangent_scalars=(tangent_scalar*radius,)*2
             )
         face = make_face(outline)
+        super().__init__(face, rotation, align, mode)
+
+class RectangleRounded(BaseSketchObject):
+    """Sketch Object: Rectangle Rounded
+
+    Create a rectangle defined by width and height with filleted corners.
+
+    Args:
+        width (float): rectangle width
+        height (float): rectangle height
+        radius (float): fillet radius
+        rotation (float, optional): angle to rotate object. Defaults to 0
+        align (Align | tuple[Align, Align], optional): align MIN, CENTER, or MAX of object.
+            Defaults to (Align.CENTER, Align.CENTER)
+        mode (Mode, optional): combination mode. Defaults to Mode.ADD
+    """
+
+    _applies_to = [BuildSketch._tag]
+
+    def __init__(
+        self,
+        width: float,
+        height: float,
+        radius: float | Sequence[float],
+        rotation: float = 0,
+        align: Align | tuple[Align, Align] | None = (Align.CENTER, Align.CENTER),
+        mode: Mode = Mode.ADD,
+    ):
+        if isinstance(radius, Sequence):
+            # Force the list of radii to have 4 items by looping and slicing it.
+            self.radius = (radius * 4)[:4]
+        else:
+            self.radius = [radius] * 4
+        for i in range(len(self.radius)):
+            if self.radius[i] + self.radius[i-1] > min(width, height):
+                raise ValueError("width and height must be > 2*radius")
+        self.width = width
+        self.rectangle_height = height
+        self.align = tuplify(align, 2)
+
+        quadrants = ((-1, -1), (-1, 1), (1, 1), (1, -1))
+        corners: list[Face] = []
+        for (quadrant, r) in zip(quadrants, self.radius):
+            point = (quadrant[X]*(width/2-r), quadrant[Y]*(height/2-r))
+            if r > 0:
+                corners.append(
+                    Pos(point)
+                    * Circle(r)
+                    )
+            else:
+                corners.append(Line((0, 0), point))
+        face = make_hull([corner.edge() for corner in corners])
         super().__init__(face, rotation, align, mode)
