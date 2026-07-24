@@ -15,9 +15,6 @@ stem_options:
 clearance: 1
 # Color of the keycap.
 color: "CornflowerBlue"
-# Z-position of the center of the top dish.
-height: 4.6
-height_increments: [2, 0]
 # Label of the keycap when viewed in OCP_VSCode.
 label: Keycap
 # Keycap material for informational purposes.
@@ -25,7 +22,7 @@ material: PBT
 # X- and Y- dimensions of the base of the keycap.
 spacing: *spacing_mx
 # Type of stem. See stem_types above for options.
-stem_type: *stem_mx
+stem_type: *stem_mx_ribbed
 
 # The sides of the keycap that extend down from the top.
 Skirt:
@@ -33,7 +30,7 @@ Skirt:
   # Fillet of the inside and outside bottom edges of the skirt.
   bottom_fillet_radius: 0.2
   # Radius of the corners at the bottom and top of the keycap.
-  fillet_radii: [1, 6.5]
+  fillet_radii: [1, 6]
   # How far above the bottom of the skirt is relative to the bottom of the stem.
   height: 1
   # Sagitta of the curvature of the skirt sides.
@@ -43,11 +40,11 @@ Skirt:
 Top:
   # Angles about the X- and Y- axes of the top of the keycap.
   angles: [0, 0]
-  angle_increments: [5, 0]
+  angle_increments: [5, 5]
   # Radius of the left-right (about the Y-axis) curvature of the keycap top.
   dish_radius: 30
   # Radius of the top edges of the keycap.
-  fillet_radius: 0.5
+  fillet_radius: 1
   # Radius of the top inside edge of the keycap.
   inside_fillet_radius: 0
   # Distance that the center of the top of the keycap is offset from the stem
@@ -61,11 +58,11 @@ Top:
   # defines the height of the point as a fraction of the top thickness (see
   # below.)
   spline_points: [
-    [-0.6, -0.8],
-    [-0.4, -0.2],
-    [0, -0.5],
-    [0.4, -0.2],
-    [0.6, -0.8]
+    [-0.6, -0.6],
+    [-0.4, 0.0],
+    [0, -0.3],
+    [0.4, 0.0],
+    [0.6, -0.6]
     ]
   # Tangent angles for the spline (see above).
   spline_tangents: [45, 0, 0, 0, -45]

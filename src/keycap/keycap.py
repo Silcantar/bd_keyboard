@@ -1,5 +1,5 @@
 import os.path
-from copy import copy
+from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import IntFlag, auto
 
@@ -48,8 +48,6 @@ class Top:
 class KeycapParameters(YAMLWizard):
     clearance: float
     color: str
-    height: float
-    height_increments: vector[2]
     label: str
     material: str
     spacing: vector[2]
@@ -60,22 +58,24 @@ class KeycapParameters(YAMLWizard):
 @dataclass
 class StemMX:
     chamfer_width: float = 0.2
-    depth: float = 3.6
+    height: float = 3.6
     radius: float = 2.7
     rib_thickness: float = 1
     size: vector[2] = (4, 1.3)
 
 @dataclass
 class StemChoc:
-    boss_size: vector[2] = (0, 0)
-    height: float = 0
-    spacing: float = 0
-    size: vector[2] = (0, 0)
+    boss_size: vector[2] = (10, 5)
+    chamfer_length: float = 0.2
+    height: float = 2
+    rib_thickness: float = 1
+    spacing: float = 5.7
+    size: vector[2] = (1.2, 3)
 
 def KeycapSet(
     config: os.Pathlike = None,
-    rows: list[int] = [2, 3, 4],
-    columns: list[int] = [0, 0, 0, 0, 1]
+    rows: list[int] = [1, 2, 3],
+    columns: list[int] = [-1, 0, 1]
     ) -> list[Part]:
     if config is None:
         parameter_file = os.path.join(
@@ -86,10 +86,14 @@ def KeycapSet(
     else:
         parameter_file = config
     parameters = KeycapParameters.from_yaml_file(parameter_file)
+    parameters.Stem = (
+        StemChoc() if StemType.CHOC in parameters.stem_type
+        else StemMX()
+        )
     keycaps: list[Part] = []
     for (i, column) in enumerate(columns):
         for (j, row) in enumerate(rows):
-            p = copy(parameters)
+            p = deepcopy(parameters)
             p.Top.angles = (
                 (
                     parameters.Top.angles[X]
@@ -100,13 +104,20 @@ def KeycapSet(
                     - column*parameters.Top.angle_increments[Y]
                     )
                 )
+            height_increments = (
+                abs((row-HOME_ROW)*sind(p.Top.angles[X])) * p.spacing[X] / 2,
+                abs(column*sind(p.Top.angles[Y])) * p.spacing[Y] / 2
+                )
             p.height = (
-                parameters.height
-                + abs(row-HOME_ROW)*parameters.height_increments[X]
-                + abs(column)*parameters.height_increments[Y]
+                parameters.Stem.height
+                + parameters.Top.thickness
+                + sum(height_increments)
                 )
             keycaps.append(
-                Pos(i*p.spacing[X], -j*p.spacing[Y])
+                Pos(
+                    (i - len(columns)/2 + 0.5)*p.spacing[X],
+                    -(j - len(rows)/2 + 0.5)*p.spacing[Y]
+                    )
                 * Keycap(parameters=p)
                 )
             keycaps[-1].label = f"Keycap R{row}C{i}"
@@ -135,11 +146,18 @@ class Keycap(BasePartObject):
             self.parameters = KeycapParameters.from_yaml_file(parameter_file)
         else:
             self.parameters = parameters
-        self.parameters.Stem = (
-            StemChoc() if StemType.CHOC in self.parameters.stem_type
-            else StemMX()
-            )
         p = self.parameters
+        try:
+            p.Stem
+        except AttributeError:
+            p.Stem = (
+                StemChoc() if StemType.CHOC in p.stem_type
+                else StemMX()
+                )
+        try:
+            p.height
+        except AttributeError:
+            p.height = p.Stem.height + p.Top.thickness
         super().__init__(
             part=self._build(),
             **kwargs
@@ -162,15 +180,17 @@ class Keycap(BasePartObject):
             )
         top_intersector = self._skirt(solid=True)
         keycap = skirt + (top & top_intersector)
+        if p.Skirt.bottom_fillet_radius > 0:
+            keycap = fillet(
+                objects=keycap.faces().filter_by(
+                    lambda f: f.center().Z == p.Skirt.height
+                    ).edges(),
+                radius=p.Skirt.bottom_fillet_radius
+                )
         if p.Top.fillet_radius > 0:
             keycap = fillet(
                 objects=keycap.edges().sort_by(Axis.Z)[-1],
                 radius=p.Top.fillet_radius
-                )
-        if p.Skirt.bottom_fillet_radius > 0:
-            keycap = fillet(
-                objects=keycap.faces().sort_by(Axis.Z)[0].edges(),
-                radius=p.Skirt.bottom_fillet_radius
                 )
         if p.Top.inside_fillet_radius > 0:
             keycap = fillet(
@@ -189,9 +209,14 @@ class Keycap(BasePartObject):
         p = self.parameters
         Shape = RectangleBlended if p.Skirt.blended_corner else RectangleRounded
         size = tuple(dim - p.clearance for dim in p.spacing)
+        height = (
+            p.height
+            + p.Top.size[X]/2 * tan(asin(p.Top.size[X]/2/p.Top.dish_radius)/2)
+            + 1
+            )
         profiles: list[Face] = []
         profiles.append(
-            Pos(*p.Top.offset, p.height + p.Top.thickness)
+            Pos(*p.Top.offset, height)
             * Rot(*p.Top.angles, 0)
             * Shape(
                 *p.Top.size,
@@ -201,7 +226,7 @@ class Keycap(BasePartObject):
         # Middle profiles
         if p.Skirt.sagitta > 0:
             profiles.append(
-                Pos(Z=(p.height+p.Skirt.height)/2)
+                Pos(Z=(p.height-p.Skirt.height)/2 + p.Skirt.height)
                 * Shape(
                     *(
                         (skirt_size+top_size)/2 + p.Skirt.sagitta
@@ -225,7 +250,7 @@ class Keycap(BasePartObject):
                 )
         return skirt
 
-    def _top(self, inside: bool = False) -> Face:
+    def _top(self, inside: bool = False) -> Part:
         p = self.parameters
         spline = Spline(
             *(
@@ -238,6 +263,7 @@ class Keycap(BasePartObject):
                 ),
             tangent_scalars=p.Top.spline_scalars
             )
+        spline = scale(spline, by=(1, 1/cosd(p.Top.angles[X]), 1))
         profile = trace(spline, line_width=p.Top.thickness)
         top = (
             Pos(*p.Top.offset, p.height)
@@ -250,26 +276,68 @@ class Keycap(BasePartObject):
             )
         return top
 
-
     def _stem_choc(self) -> Part:
         p = self.parameters
-        raise NotImplementedError("Choc stem not implemented yet.")
+        boss_location = Pos(Z=p.Stem.height)
+        stem = (
+            boss_location
+            * extrude(
+                RectangleRounded(
+                    *p.Stem.boss_size,
+                    radius=p.Stem.boss_size[Y]/2
+                    ),
+                amount=BIG
+                )
+            )
+        tenon_locations = [
+            Pos(X=i*p.Stem.spacing/2)
+            for i in (-1, 1)
+            ]
+        stem += (
+            tenon_locations
+            * Box(*p.Stem.size, p.Stem.height, align=BOTTOM)
+            )
+        stem = chamfer(
+            stem.edges().group_by(Axis.Z)[0],
+            length=p.Stem.chamfer_length
+            )
+        if StemType.RIBBED in p.stem_type:
+            stem += [
+                Pos(Z=p.Stem.size[Z])
+                * Rot(Z=i*90)
+                * Box(
+                    length=BIG,
+                    width=p.Stem.rib_thickness,
+                    height=BIG,
+                    align=BOTTOM
+                    )
+                for i in range(2)
+                ]
+        stem &= (
+            Pos(Z=-2*EPS) * self._skirt(solid=True)
+            + Cylinder(
+                radius=max(p.Stem.boss_size),
+                height=p.Skirt.height,
+                align=BOTTOM
+                )
+            )
+        return stem
 
     def _stem_MX(self) -> Part:
         p = self.parameters
         stem = Cylinder(
             radius=p.Stem.radius,
-            height=p.height,
+            height=p.Stem.height + p.Top.thickness,
             align=BOTTOM
             )
         if StemType.RIBBED in p.stem_type:
             stem += [
-                Pos(Z=p.Stem.depth)
+                Pos(Z=p.Stem.height)
                 * Rot(Z=i*90)
                 * Box(
                     length=BIG,
                     width=p.Stem.rib_thickness,
-                    height=p.height - p.Stem.depth,
+                    height=BIG,
                     align=BOTTOM
                     )
                 for i in range(2)
@@ -278,7 +346,7 @@ class Keycap(BasePartObject):
             Rot(Z=i*90)
             * Box(
                 *p.Stem.size,
-                height=p.Stem.depth,
+                height=p.Stem.height,
                 align=BOTTOM
                 )
             for i in range(2)
