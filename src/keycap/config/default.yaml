@@ -1,6 +1,10 @@
 # Default Parameters for BD_Keyboard keycaps.
 # Alias definitions
 thickness: &thickness 1
+legend_style_options:
+  doubleshot: &doubleshot doubleshot
+  engraved: &engraved engraved
+  printed: &printed printed # Includes dye sublimation
 spacing_options:
   mx: &spacing_mx [19, 19]
   mx_inch: &spacing_mx_inch [19.05, 19.05]
@@ -23,14 +27,23 @@ material: PBT
 spacing: *spacing_mx
 # Type of stem. See stem_types above for options.
 stem_type: *stem_mx_ribbed
-
+thickness: 1
+Legend:
+  color: 0x202020
+  depth: 0.5
+  font: Fira Code
+  font_style: regular
+  position: [0, 0]
+  size: 5
+  style: *doubleshot
 # The sides of the keycap that extend down from the top.
 Skirt:
+  base_angle: 80
   blended_corner: true
   # Fillet of the inside and outside bottom edges of the skirt.
   bottom_fillet_radius: 0.2
   # Radius of the corners at the bottom and top of the keycap.
-  fillet_radii: [1, 6]
+  fillet_radii: [1, 2]
   # How far above the bottom of the skirt is relative to the bottom of the stem.
   height: 1
   # Sagitta of the curvature of the skirt sides.
@@ -49,24 +62,26 @@ Top:
   inside_fillet_radius: 0
   # Distance that the center of the top of the keycap is offset from the stem
   # in the X- and Y-directions.
-  offset: [0, 0]
+  offsets: [0, 0]
+  offset_increments: [1, 0.5]
   # Dimensions of the top surface of the keycap in the X- and Y-directions.
-  size: [14, 14]
+  # size: [14, 14]
   # Points used to define the spline forming the front-to-back curvature of the
   # keycap top. The first value defines the position of the point along the
   # Y-axis as a fraction of the top's Y size (immediately above). The second
   # defines the height of the point as a fraction of the top thickness (see
   # below.)
-  spline_points: [
-    [-0.6, -0.6],
-    [-0.4, 0.0],
-    [0, -0.3],
-    [0.4, 0.0],
-    [0.6, -0.6]
+  center_points: [
+    [0, -0.4, 1],
+    [0, -0.33, 1.1],
+    [0, 0, 1],
+    [0, 0.33, 1.1],
+    [0, 0.4, 1]
     ]
   # Tangent angles for the spline (see above).
-  spline_tangents: [45, 0, 0, 0, -45]
-  # Weight of each tangent.
-  spline_scalars: [1, 1, 2, 1, 1]
+  center_tangents: [30, 0, 0, 0, -30]
+  ridge_angle: 45
+  ridge_position: [0.35, 0, 1.2]
+  ridge_size: [0.35, 1]
   # Thickness of the keycap top.
   thickness: *thickness

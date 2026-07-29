@@ -1,13 +1,15 @@
 import os.path
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass, field
-from enum import IntFlag, auto
+from enum import IntFlag, StrEnum, auto
 
 from build123d import *
 try:
     from dataclass_wizard import YAMLWizard
 except ImportError:
     from dataclass_wizard.mixins.yaml import YAMLWizard
+from ocp_gordon.internal.interpolate_curve_network import CompatibilityError
 
 try:
     from bd_keyboard.src.common import *
@@ -16,13 +18,29 @@ except ImportError:
 
 HOME_ROW = 3
 
+class LegendStyle(StrEnum):
+    DOUBLESHOT = auto()
+    ENGRAVED = auto()
+    PRINTED = auto()
+
 class StemType(IntFlag):
     DEFAULT = 0 # MX with no ribs.
     CHOC = auto()
     RIBBED = auto()
 
 @dataclass
+class Legend:
+    color: color
+    depth: float
+    font: str
+    font_style: str
+    position: vector[2]
+    size: float
+    style: LegendStyle
+
+@dataclass
 class Skirt:
+    base_angle: float
     blended_corner: bool
     bottom_fillet_radius: float
     fillet_radii: vector[2]
@@ -34,14 +52,16 @@ class Skirt:
 class Top:
     angles: vector[2]
     angle_increments: vector[2]
+    center_points: list[vector[3]]
+    center_tangents: list[float]
     dish_radius: float
     fillet_radius: float
     inside_fillet_radius: float
-    offset: vector[2]
-    size: vector[2]
-    spline_points: list[vector[2]]
-    spline_tangents: list[float]
-    spline_scalars: list[float]
+    offsets: vector[2]
+    offset_increments: vector[2]
+    ridge_angle: float
+    ridge_position: vector[3]
+    ridge_size: vector[2]
     thickness: float
 
 @dataclass
@@ -52,6 +72,8 @@ class KeycapParameters(YAMLWizard):
     material: str
     spacing: vector[2]
     stem_type: StemType
+    thickness: float
+    Legend: Legend
     Skirt: Skirt
     Top: Top
 
@@ -74,8 +96,9 @@ class StemChoc:
 
 def KeycapSet(
     config: os.Pathlike = None,
-    rows: list[int] = [1, 2, 3],
-    columns: list[int] = [-1, 0, 1]
+    columns: list[int] = [0, 0, 0, 0, 1], # [0], #
+    rows: list[int] = [2, 3, 4, 5], # [3], #
+    legends: str | list[str] = None,
     ) -> list[Part]:
     if config is None:
         parameter_file = os.path.join(
@@ -90,6 +113,11 @@ def KeycapSet(
         StemChoc() if StemType.CHOC in parameters.stem_type
         else StemMX()
         )
+    key_count = len(columns) * len(rows)
+    if isinstance(legends, Sequence):
+        legends = (legends * key_count)[:key_count]
+    else:
+        legends = [legends] * key_count
     keycaps: list[Part] = []
     for (i, column) in enumerate(columns):
         for (j, row) in enumerate(rows):
@@ -102,6 +130,16 @@ def KeycapSet(
                 (
                     parameters.Top.angles[Y]
                     - column*parameters.Top.angle_increments[Y]
+                    )
+                )
+            p.Top.offsets = (
+                (
+                    parameters.Top.offsets[X]
+                    - column*parameters.Top.offset_increments[X]
+                    ),
+                (
+                    parameters.Top.offsets[Y]
+                    + (row-HOME_ROW)*parameters.Top.offset_increments[Y]
                     )
                 )
             height_increments = (
@@ -118,19 +156,20 @@ def KeycapSet(
                     (i - len(columns)/2 + 0.5)*p.spacing[X],
                     -(j - len(rows)/2 + 0.5)*p.spacing[Y]
                     )
-                * Keycap(parameters=p)
+                * Keycap(legend=legends[i][j], parameters=p)
                 )
             keycaps[-1].label = f"Keycap R{row}C{i}"
     return keycaps
 
-class Keycap(BasePartObject):
+class Keycap(Part):
     """Parametric keycap model."""
 
     def __init__(
         self,
         color: color = None,
-        label: str = None,
         config: os.PathLike = None,
+        label: str = None,
+        legend: str = None,
         parameters: KeycapParameters = None,
         **kwargs
         ):
@@ -158,123 +197,192 @@ class Keycap(BasePartObject):
             p.height
         except AttributeError:
             p.height = p.Stem.height + p.Top.thickness
+        p.size = (
+            p.spacing[X] - p.clearance,
+            p.spacing[Y] - p.clearance,
+            p.height
+            )
+        self.legend = legend
         super().__init__(
-            part=self._build(),
+            children=self._build(),
             **kwargs
             )
-        self.color = p.color if color is None else color
         self.label = p.label if label is None else label
         self.material = p.material
 
-    def _build(self) -> Part:
+    def _build(self) -> list[Part]:
         p = self.parameters
-        top = self._top()
+        (body_outer, body_mid, body_inner) = self._body()
+        stem_intersector = (
+            body_mid
+            + Box(10, 10, 2*p.Skirt.height, align=BOTTOM)
+            )
         if StemType.CHOC in p.stem_type:
-            stem = self._stem_choc()
+            stem = self._stem_choc() & stem_intersector
         else:
-            stem = self._stem_MX()
-        skirt = split(
-            objects=self._skirt() + stem,
-            bisect_by=top.faces().sort_by(SortBy.AREA)[-1],
-            keep=Keep.BOTTOM
-            )
-        top_intersector = self._skirt(solid=True)
-        keycap = skirt + (top & top_intersector)
-        if p.Skirt.bottom_fillet_radius > 0:
-            keycap = fillet(
-                objects=keycap.faces().filter_by(
-                    lambda f: f.center().Z == p.Skirt.height
-                    ).edges(),
-                radius=p.Skirt.bottom_fillet_radius
-                )
-        if p.Top.fillet_radius > 0:
-            keycap = fillet(
-                objects=keycap.edges().sort_by(Axis.Z)[-1],
-                radius=p.Top.fillet_radius
-                )
-        if p.Top.inside_fillet_radius > 0:
-            keycap = fillet(
-                objects=(
-                    keycap
-                    .faces()
-                    .filter_by(GeomType.REVOLUTION)
-                    .sort_by(Axis.Z)[0]
-                    .edges()
-                    ),
-                radius=p.Top.inside_fillet_radius
-                )
-        return keycap.clean()
+            stem = self._stem_MX() & stem_intersector
+        children: list[Part] = []
+        if self.legend != "" and self.legend is not None:
+            legend = self._legend() & body_outer
+            if p.Legend.style == LegendStyle.DOUBLESHOT:
+                keycap = body_outer - body_mid - legend
+                legend += body_mid - body_inner + stem
+            else:
+                keycap = body_outer - body_inner - legend + stem
+            legend.color = p.Legend.color
+            legend.label = "Legend"
+            children.append(legend)
+        else:
+            keycap = body_outer - body_inner + stem
+        keycap.color = p.color
+        keycap.label = "Keycap"
+        children.append(keycap)
+        return children
 
-    def _skirt(self, solid: bool = False) -> Part:
+    def _body(self, solid: bool = False) -> tuple[Part, Part, Part]:
+        PROFILE_COUNT = 5
         p = self.parameters
-        Shape = RectangleBlended if p.Skirt.blended_corner else RectangleRounded
-        size = tuple(dim - p.clearance for dim in p.spacing)
-        height = (
-            p.height
-            + p.Top.size[X]/2 * tan(asin(p.Top.size[X]/2/p.Top.dish_radius)/2)
-            + 1
+        top_guides = [
+            Pos(
+                i*p.Top.ridge_position[X]*p.size[X],
+                p.Top.ridge_position[Y]*p.size[Y],
+                p.Top.ridge_position[Z]*p.size[Z]
+                )
+            * Rot(Y=90 + i*p.Top.ridge_angle)
+            * SagittaArc(
+                start_point=(0, -p.Top.ridge_size[X]*p.size[X]),
+                end_point=(0, p.Top.ridge_size[X]*p.size[X]),
+                sagitta=p.Top.ridge_size[Y]
+                )
+            for i in (-1, 1)
+            ]
+        top_guides.insert(1, Spline(
+            [
+                (point[X]*p.size[X], point[Y]*p.size[Y], point[Z]*p.size[Z])
+                for point in p.Top.center_points
+                ],
+            tangents=[
+                (0, cosd(angle), sind(angle))
+                for angle in p.Top.center_tangents
+                ]
+            ))
+        top_profiles = [
+            ThreePointArc(
+                [
+                    Wire(guide).position_at(p/(PROFILE_COUNT-1))
+                    for guide in top_guides
+                    ]
+                )
+                for p in range(PROFILE_COUNT)
+            ]
+        try:
+            face = Face.make_gordon_surface(top_profiles, top_guides)
+        except CompatibilityError:
+            face = Face.make_surface(top_profiles + top_guides)
+        top_face = (
+            Pos(*p.Top.offsets, p.height)
+            * Rot(*p.Top.angles)
+            * Pos(Z=-p.height)
+            * face
             )
-        profiles: list[Face] = []
-        profiles.append(
-            Pos(*p.Top.offset, height)
-            * Rot(*p.Top.angles, 0)
-            * Shape(
-                *p.Top.size,
-                radius=p.Skirt.fillet_radii[1]
+        top_face_projected = project(
+            objects=top_face,
+            workplane=Plane.XY
+            )
+        top_face_projected = fillet(
+            objects=top_face_projected.vertices(),
+            radius=p.Skirt.fillet_radii[1]
+            )
+        top_face &= extrude(
+            to_extrude=top_face_projected,
+            amount=BIG
+            )
+        base = (
+            Pos(Z=p.Skirt.height)
+            * RectangleRounded(*p.size[0:2], radius=p.Skirt.fillet_radii[0])
+            )
+        sort_reference = Vector(BIG, 2*BIG, 0)
+        edge_pairs = list(zip(
+            base.edges().sort_by_distance(sort_reference),
+            top_face.edges().sort_by_distance(sort_reference)
+            ))
+        skirt_faces: list[Face] = []
+        for edge_pair in edge_pairs:
+            profiles: list[Edge] = []
+            for param in range(PROFILE_COUNT):
+                points = [
+                    edge_pair[0].position_at(param/(PROFILE_COUNT-1)),
+                    edge_pair[1].position_at(param/(PROFILE_COUNT-1))
+                    ]
+                base_direction = Vector(
+                    points[1].X - points[0].X,
+                    points[1].Y - points[0].Y,
+                    ).normalized()
+                tangent = (
+                    base_direction.X,
+                    base_direction.Y,
+                    tand(p.Skirt.base_angle)
+                    )
+                profiles.append(
+                    TangentArc(
+                        points,
+                        tangent=tangent
+                        )
+                    )
+            try:
+                face = Face.make_gordon_surface(profiles, edge_pair)
+            except CompatibilityError:
+                face = Face.make_surface(profiles + list(edge_pair))
+            if face.normal_at().Z < 0:
+                face = -face
+            skirt_faces.append(face)
+        body_shell = Shell(skirt_faces + [base, top_face])
+        body_outer = Solid(body_shell)
+        body_mid = scale(
+            body_outer,
+            by=(
+                (p.size[X] - p.thickness)/p.size[X],
+                (p.size[Y] - p.thickness)/p.size[Y],
+                (p.size[Z] - p.thickness/2)/p.size[Z]
                 )
             )
-        # Middle profiles
-        if p.Skirt.sagitta > 0:
-            profiles.append(
-                Pos(Z=(p.height-p.Skirt.height)/2 + p.Skirt.height)
-                * Shape(
-                    *(
-                        (skirt_size+top_size)/2 + p.Skirt.sagitta
-                        for (skirt_size, top_size) in zip(size, p.Top.size)
-                        ),
-                        radius=sum(p.Skirt.fillet_radii)/2
+        body_inner = scale(
+            body_outer,
+            by=(
+                (p.size[X] - 2*p.thickness)/p.size[X],
+                (p.size[Y] - 2*p.thickness)/p.size[Y],
+                (p.size[Z] - p.thickness)/p.size[Z]
+                )
+            )
+        return (body_outer, body_mid, body_inner)
+
+    def _legend(self) -> Part:
+        p = self.parameters
+        font_style_map = {
+            "regular": FontStyle.REGULAR,
+            "bold": FontStyle.BOLD,
+            "italic": FontStyle.ITALIC,
+            "bolditalic": FontStyle.BOLDITALIC
+            }
+        legend_location = (
+            Pos(
+                *p.Legend.position,
+                p.Stem.height + (
+                    p.thickness - p.Legend.depth
+                    if p.Legend.style != LegendStyle.DOUBLESHOT
+                    else 0
                     )
                 )
-        profiles.append(
-            Pos(Z=p.Skirt.height)
-            * Shape(
-                *size,
-                radius=p.Skirt.fillet_radii[0]
-                )
+            * Pos(*p.Top.offsets)
             )
-        skirt = loft(profiles)
-        if not solid:
-            skirt -= scale(
-                objects=skirt,
-                by=(*((dim - 2*p.Skirt.thickness)/dim for dim in size), 1),
-                )
-        return skirt
-
-    def _top(self, inside: bool = False) -> Part:
-        p = self.parameters
-        spline = Spline(
-            *(
-                (p.Top.size[X]*point[X], p.Top.thickness*point[Y])
-                for point in p.Top.spline_points
-                ),
-            tangents=(
-                (cosd(angle), sind(angle))
-                for angle in p.Top.spline_tangents
-                ),
-            tangent_scalars=p.Top.spline_scalars
+        sketch = legend_location * Text(
+            txt=self.legend,
+            font_size=p.Legend.size,
+            font=p.Legend.font,
+            font_style=font_style_map[p.Legend.font_style.lower()]
             )
-        spline = scale(spline, by=(1, 1/cosd(p.Top.angles[X]), 1))
-        profile = trace(spline, line_width=p.Top.thickness)
-        top = (
-            Pos(*p.Top.offset, p.height)
-            * Rot(*p.Top.angles, 90)
-            * Pos(Z=p.Top.dish_radius)
-            * revolve(
-                profiles=Pos(Y=-p.Top.dish_radius) * profile,
-                axis=Axis.X
-                )
-            )
-        return top
+        legend = extrude(sketch, amount=BIG)
+        return legend
 
     def _stem_choc(self) -> Part:
         p = self.parameters
@@ -313,21 +421,13 @@ class Keycap(BasePartObject):
                     )
                 for i in range(2)
                 ]
-        stem &= (
-            Pos(Z=-2*EPS) * self._skirt(solid=True)
-            + Cylinder(
-                radius=max(p.Stem.boss_size),
-                height=p.Skirt.height,
-                align=BOTTOM
-                )
-            )
         return stem
 
     def _stem_MX(self) -> Part:
         p = self.parameters
         stem = Cylinder(
             radius=p.Stem.radius,
-            height=p.Stem.height + p.Top.thickness,
+            height=BIG,
             align=BOTTOM
             )
         if StemType.RIBBED in p.stem_type:
@@ -360,14 +460,6 @@ class Keycap(BasePartObject):
                 .filter_by(GeomType.LINE)
                 ),
             length=p.Stem.chamfer_width
-            )
-        stem &= (
-            Pos(Z=-2*EPS) * self._skirt(solid=True)
-            + Cylinder(
-                radius=p.Stem.radius,
-                height=p.Skirt.height,
-                align=BOTTOM
-                )
             )
         return stem
 
@@ -413,5 +505,11 @@ if __name__ == "__main__":
         to_export=keycap,
         file_path=args.step
         )
-    keycap_set = KeycapSet()
+    keycap_set = KeycapSet(legends=[
+        ["'", "A", "X", ""],
+        ["W", "R", "V", "⎙"],
+        ["F", "S", "C", "⎋"],
+        ["P", "T", "D", "⎈"],
+        ["B", "G", "Q", ""]
+        ])
     show(keycap_set)

@@ -162,7 +162,7 @@ class RectangleBlended(BaseSketchObject):
         face = make_face(outline)
         super().__init__(face, rotation, align, mode)
 
-class RectangleRounded(BaseSketchObject):
+class RectangleRoundedExt(BaseSketchObject):
     """Sketch Object: Rectangle Rounded
 
     Create a rectangle defined by width and height with filleted corners.
