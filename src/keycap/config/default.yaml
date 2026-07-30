@@ -1,6 +1,5 @@
 # Default Parameters for BD_Keyboard keycaps.
-# Alias definitions
-thickness: &thickness 1
+# ---- Alias definitions ----
 legend_style_options:
   doubleshot: &doubleshot doubleshot
   engraved: &engraved engraved
@@ -14,11 +13,12 @@ stem_options:
   choc: &stem_choc 1
   mx_ribbed: &stem_mx_ribbed 2
   choc_ribbed: &stem_choc_ribbed 3
-# Keycap Parameters
+# ---- Keycap Parameters ----
 # Clearance between keycaps.
 clearance: 1
 # Color of the keycap.
-color: "CornflowerBlue"
+# color: "CornflowerBlue"
+color: 0x663399 #RebeccaPurple
 # Label of the keycap when viewed in OCP_VSCode.
 label: Keycap
 # Keycap material for informational purposes.
@@ -27,50 +27,47 @@ material: PBT
 spacing: *spacing_mx
 # Type of stem. See stem_types above for options.
 stem_type: *stem_mx_ribbed
-thickness: 1
+# Thickness of keycap shell.
+thickness: 1.6
 Legend:
-  color: 0x202020
+  # Legend color.
+  # color: 0x202020
+  color: GhostWhite
+  # Engraved legend depth.
   depth: 0.5
+  # Legend font.
   font: Fira Code
+  # Font style.
   font_style: regular
+  # Position of legend on keycap.
   position: [0, 0]
+  # Thickness of printed legend.
+  print_thickness: 0.01
+  # Size of legend (mm).
   size: 5
+  # Legend style.
   style: *doubleshot
 # The sides of the keycap that extend down from the top.
 Skirt:
+  # Angle of the bottom of the skirt.
   base_angle: 80
-  blended_corner: true
-  # Fillet of the inside and outside bottom edges of the skirt.
-  bottom_fillet_radius: 0.2
   # Radius of the corners at the bottom and top of the keycap.
   fillet_radii: [1, 2]
   # How far above the bottom of the skirt is relative to the bottom of the stem.
   height: 1
-  # Sagitta of the curvature of the skirt sides.
-  sagitta: 1
-  # Thickness of the keycap sides.
-  thickness: *thickness
 Top:
   # Angles about the X- and Y- axes of the top of the keycap.
   angles: [0, 0]
-  angle_increments: [5, 5]
-  # Radius of the left-right (about the Y-axis) curvature of the keycap top.
-  dish_radius: 30
-  # Radius of the top edges of the keycap.
-  fillet_radius: 1
-  # Radius of the top inside edge of the keycap.
-  inside_fillet_radius: 0
-  # Distance that the center of the top of the keycap is offset from the stem
-  # in the X- and Y-directions.
+  # Amount that angles change between rows/columns.
+  angle_increments: [2, 5]
+  # Distance that top is offset from center of the base.
   offsets: [0, 0]
+  # Amount that the offsets change between rows/columns.
   offset_increments: [1, 0.5]
-  # Dimensions of the top surface of the keycap in the X- and Y-directions.
-  # size: [14, 14]
   # Points used to define the spline forming the front-to-back curvature of the
-  # keycap top. The first value defines the position of the point along the
-  # Y-axis as a fraction of the top's Y size (immediately above). The second
-  # defines the height of the point as a fraction of the top thickness (see
-  # below.)
+  # keycap top. The second value defines the position of the point along the
+  # Y-axis as a fraction of the top's Y size (immediately above). The third
+  # defines the height of the point as a fraction of center height.
   center_points: [
     [0, -0.4, 1],
     [0, -0.33, 1.1],
@@ -80,8 +77,10 @@ Top:
     ]
   # Tangent angles for the spline (see above).
   center_tangents: [30, 0, 0, 0, -30]
+  # Angle of the side ridges.
   ridge_angle: 45
+  # Position of the side ridges relative to the keycap size.
   ridge_position: [0.35, 0, 1.2]
+  # Size of the side ridges. First value is the length of the arc relative to
+  # the keycap depth and the second is the sagitta of the arc in mm.
   ridge_size: [0.35, 1]
-  # Thickness of the keycap top.
-  thickness: *thickness

@@ -1,7 +1,7 @@
 import os.path
 from collections.abc import Sequence
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntFlag, StrEnum, auto
 
 from build123d import *
@@ -35,18 +35,15 @@ class Legend:
     font: str
     font_style: str
     position: vector[2]
+    print_thickness: float
     size: float
     style: LegendStyle
 
 @dataclass
 class Skirt:
     base_angle: float
-    blended_corner: bool
-    bottom_fillet_radius: float
     fillet_radii: vector[2]
     height: float
-    sagitta: float
-    thickness: float
 
 @dataclass
 class Top:
@@ -54,20 +51,16 @@ class Top:
     angle_increments: vector[2]
     center_points: list[vector[3]]
     center_tangents: list[float]
-    dish_radius: float
-    fillet_radius: float
-    inside_fillet_radius: float
     offsets: vector[2]
     offset_increments: vector[2]
     ridge_angle: float
     ridge_position: vector[3]
     ridge_size: vector[2]
-    thickness: float
 
 @dataclass
 class KeycapParameters(YAMLWizard):
     clearance: float
-    color: str
+    color: color
     label: str
     material: str
     spacing: vector[2]
@@ -96,9 +89,10 @@ class StemChoc:
 
 def KeycapSet(
     config: os.Pathlike = None,
-    columns: list[int] = [0, 0, 0, 0, 1], # [0], #
-    rows: list[int] = [2, 3, 4, 5], # [3], #
+    columns: list[int] = [0],
+    rows: list[int] = [3],
     legends: str | list[str] = None,
+    require_legend: bool = False
     ) -> list[Part]:
     if config is None:
         parameter_file = os.path.join(
@@ -121,6 +115,15 @@ def KeycapSet(
     keycaps: list[Part] = []
     for (i, column) in enumerate(columns):
         for (j, row) in enumerate(rows):
+            if (
+                require_legend
+                and (legends[i][j] == "" or legends[i][j] is None)
+                ):
+                continue
+            print(
+                f"{bcolors.OKBLUE}Building keycap R{row}C{i} — "
+                f"legend: {legends[i][j].replace('\n', ' ')}.{bcolors.ENDC}"
+                )
             p = deepcopy(parameters)
             p.Top.angles = (
                 (
@@ -148,7 +151,7 @@ def KeycapSet(
                 )
             p.height = (
                 parameters.Stem.height
-                + parameters.Top.thickness
+                + parameters.thickness
                 + sum(height_increments)
                 )
             keycaps.append(
@@ -196,7 +199,7 @@ class Keycap(Part):
         try:
             p.height
         except AttributeError:
-            p.height = p.Stem.height + p.Top.thickness
+            p.height = p.Stem.height + p.thickness
         p.size = (
             p.spacing[X] - p.clearance,
             p.spacing[Y] - p.clearance,
@@ -222,13 +225,29 @@ class Keycap(Part):
         else:
             stem = self._stem_MX() & stem_intersector
         children: list[Part] = []
-        if self.legend != "" and self.legend is not None:
-            legend = self._legend() & body_outer
-            if p.Legend.style == LegendStyle.DOUBLESHOT:
-                keycap = body_outer - body_mid - legend
-                legend += body_mid - body_inner + stem
-            else:
-                keycap = body_outer - body_inner - legend + stem
+        legend = self._legend()
+        if legend.volume > 0:
+            legend &= body_outer
+            match p.Legend.style:
+                case LegendStyle.DOUBLESHOT:
+                    keycap = body_outer - body_mid - legend
+                    legend += body_mid
+                    legend -= body_inner
+                    legend += stem
+                case LegendStyle.ENGRAVED:
+                    keycap = body_outer - body_inner - legend + stem
+                case LegendStyle.PRINTED:
+                    keycap = body_outer - body_inner + stem
+                    legend_intersector = (
+                        keycap
+                        .faces()
+                        .filter_by(lambda f: f.normal_at().Z > 0)
+                        .sort_by(Axis.Z)[-1]
+                        )
+                    legend = thicken(
+                        legend & legend_intersector,
+                        amount=p.Legend.print_thickness
+                        )
             legend.color = p.Legend.color
             legend.label = "Legend"
             children.append(legend)
@@ -505,11 +524,23 @@ if __name__ == "__main__":
         to_export=keycap,
         file_path=args.step
         )
-    keycap_set = KeycapSet(legends=[
-        ["'", "A", "X", ""],
-        ["W", "R", "V", "⎙"],
-        ["F", "S", "C", "⎋"],
-        ["P", "T", "D", "⎈"],
-        ["B", "G", "Q", ""]
-        ])
+    keycap_set = KeycapSet(
+        columns=[-1, 0, 0, 0, 0, 1, -1, 0, 0, 0, 0, 1],
+        rows=[2, 3, 4, 5, 1, 2],
+        legends=[
+            ["",        "",     "",     "",     "",     "¶"],
+            ['"\n'+"'", "A",    "X",    "",     "",     ""],
+            ["W",       "R",    "V",    "◉",    "",     ""],
+            ["F",       "S",    "C",    "⎋",    "",     ""],
+            ["P",       "T",    "D",    "⎈",    "⇤",    "␣"],
+            ["B",       "G",    "Q",    "",     "",     "#"],
+            ["J",       "M",    "Z",    "",     "",     "◇"],
+            ["L",       "N",    "H",    "⌥",    "⇥",    "⌫"],
+            ["U",       "E",    "K",    "⌦",    "",     ""],
+            ["Y",       "I",    ";\n,", "≡",    "",     ""],
+            ["-\n—",    "O",    ":\n.", "",     "",     ""],
+            ["",        "",     "",     "",     "",     "⇧"],
+            ],
+        require_legend=True
+        )
     show(keycap_set)
