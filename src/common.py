@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import IntEnum, auto
+from enum import IntEnum, StrEnum, auto
 from math import (
     cos, sin, tan,
     acos, asin, atan,
@@ -89,6 +89,17 @@ def atand(x: float) -> float:
 
 def sign(x):
     return copysign(1, x)
+
+class bcolors(StrEnum):
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 class RectangleBlended(BaseSketchObject):
     """Sketch Object: Rectangle Blended

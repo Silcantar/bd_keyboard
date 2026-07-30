@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import IntFlag, StrEnum, auto
+from os import PathLike
 
 from build123d import *
 try:
@@ -50,17 +51,20 @@ class Top:
     angles: vector[2]
     angle_increments: vector[2]
     center_points: list[vector[3]]
+    center_point_references: list[float]
     center_tangents: list[float]
     offsets: vector[2]
     offset_increments: vector[2]
     ridge_angle: float
-    ridge_position: vector[3]
-    ridge_size: vector[2]
+    ridge_height: float
+    ridge_inset: float
+    ridge_position_z: float
 
 @dataclass
 class KeycapParameters(YAMLWizard):
     clearance: float
     color: color
+    dimensions: vector[2]
     label: str
     material: str
     spacing: vector[2]
@@ -69,6 +73,14 @@ class KeycapParameters(YAMLWizard):
     Legend: Legend
     Skirt: Skirt
     Top: Top
+
+@dataclass
+class KeycapSetParameters(YAMLWizard):
+    config: list[str]
+    columns: list[int]
+    rows: list[int]
+    legends: list[list[str]]
+    require_legend: bool
 
 @dataclass
 class StemMX:
@@ -91,7 +103,7 @@ def KeycapSet(
     config: os.Pathlike = None,
     columns: list[int] = [0],
     rows: list[int] = [3],
-    legends: str | list[str] = None,
+    legends: str | list[list[str]] = None,
     require_legend: bool = False
     ) -> list[Part]:
     if config is None:
@@ -101,28 +113,36 @@ def KeycapSet(
             "default.yaml"
             )
     else:
-        parameter_file = config
+        parameter_file = os.path.join(
+            os.path.dirname(__file__),
+            *config
+            )
     parameters = KeycapParameters.from_yaml_file(parameter_file)
     parameters.Stem = (
         StemChoc() if StemType.CHOC in parameters.stem_type
         else StemMX()
         )
     key_count = len(columns) * len(rows)
-    if isinstance(legends, Sequence):
-        legends = (legends * key_count)[:key_count]
-    else:
-        legends = [legends] * key_count
+    if legends is None or isinstance(legends, str):
+        legends = [[legends] * len(columns)] * len(rows)
     keycaps: list[Part] = []
     for (i, column) in enumerate(columns):
         for (j, row) in enumerate(rows):
             if (
                 require_legend
-                and (legends[i][j] == "" or legends[i][j] is None)
+                and (legends[j][i] == "" or legends[j][i] is None)
                 ):
                 continue
+            print_legend = (
+                legends[j][i].replace('\n', ' ')
+                if isinstance(legends[j][i], str)
+                else legends[j][i]
+                )
             print(
-                f"{bcolors.OKBLUE}Building keycap R{row}C{i} — "
-                f"legend: {legends[i][j].replace('\n', ' ')}.{bcolors.ENDC}"
+                bcolors.OKBLUE
+                + f"Building keycap R{row}C{i} — "
+                + f"legend: {print_legend}."
+                + bcolors.ENDC
                 )
             p = deepcopy(parameters)
             p.Top.angles = (
@@ -156,10 +176,10 @@ def KeycapSet(
                 )
             keycaps.append(
                 Pos(
-                    (i - len(columns)/2 + 0.5)*p.spacing[X],
-                    -(j - len(rows)/2 + 0.5)*p.spacing[Y]
+                    (i - len(columns)/2 + 0.5)*p.dimensions[X]*p.spacing[X],
+                    -(j - len(rows)/2 + 0.5)*p.dimensions[Y]*p.spacing[Y]
                     )
-                * Keycap(legend=legends[i][j], parameters=p)
+                * Keycap(legend=legends[j][i], parameters=p)
                 )
             keycaps[-1].label = f"Keycap R{row}C{i}"
     return keycaps
@@ -201,8 +221,8 @@ class Keycap(Part):
         except AttributeError:
             p.height = p.Stem.height + p.thickness
         p.size = (
-            p.spacing[X] - p.clearance,
-            p.spacing[Y] - p.clearance,
+            p.dimensions[X]*p.spacing[X] - p.clearance,
+            p.dimensions[Y]*p.spacing[Y] - p.clearance,
             p.height
             )
         self.legend = legend
@@ -261,25 +281,32 @@ class Keycap(Part):
     def _body(self, solid: bool = False) -> tuple[Part, Part, Part]:
         PROFILE_COUNT = 5
         p = self.parameters
+        guide_length = p.size[Y]/2 - p.spacing[Y]*p.Top.ridge_inset
         top_guides = [
             Pos(
-                i*p.Top.ridge_position[X]*p.size[X],
-                p.Top.ridge_position[Y]*p.size[Y],
-                p.Top.ridge_position[Z]*p.size[Z]
+                i * (p.size[X]/2 - p.spacing[X]*p.Top.ridge_inset),
+                0,
+                p.Top.ridge_position_z*p.size[Z]
                 )
             * Rot(Y=90 + i*p.Top.ridge_angle)
             * SagittaArc(
-                start_point=(0, -p.Top.ridge_size[X]*p.size[X]),
-                end_point=(0, p.Top.ridge_size[X]*p.size[X]),
-                sagitta=p.Top.ridge_size[Y]
+                start_point=(0, -guide_length),
+                end_point=(0, guide_length),
+                sagitta=p.Top.ridge_height
                 )
             for i in (-1, 1)
             ]
+        spline_points = [
+            (
+                0,
+                ref * (p.size[Y]/2 - point[Y]*p.spacing[Y]),
+                point[Z] * p.size[Z]
+                )
+            for (point, ref)
+            in zip(p.Top.center_points, p.Top.center_point_references)
+            ]
         top_guides.insert(1, Spline(
-            [
-                (point[X]*p.size[X], point[Y]*p.size[Y], point[Z]*p.size[Z])
-                for point in p.Top.center_points
-                ],
+            spline_points,
             tangents=[
                 (0, cosd(angle), sind(angle))
                 for angle in p.Top.center_tangents
@@ -321,10 +348,14 @@ class Keycap(Part):
             * RectangleRounded(*p.size[0:2], radius=p.Skirt.fillet_radii[0])
             )
         sort_reference = Vector(BIG, 2*BIG, 0)
-        edge_pairs = list(zip(
-            base.edges().sort_by_distance(sort_reference),
-            top_face.edges().sort_by_distance(sort_reference)
-            ))
+        base_edges_sorted = base.edges().sort_by_distance(sort_reference)
+        edge_pairs = [
+            (
+                base_edge,
+                top_face.edges().sort_by_distance(base_edge.center())[0]
+                )
+            for base_edge in base_edges_sorted
+            ]
         skirt_faces: list[Face] = []
         for edge_pair in edge_pairs:
             profiles: list[Edge] = []
@@ -363,7 +394,8 @@ class Keycap(Part):
                 (p.size[X] - p.thickness)/p.size[X],
                 (p.size[Y] - p.thickness)/p.size[Y],
                 (p.size[Z] - p.thickness/2)/p.size[Z]
-                )
+                ),
+            about=(0, 0, p.Skirt.height)
             )
         body_inner = scale(
             body_outer,
@@ -371,7 +403,8 @@ class Keycap(Part):
                 (p.size[X] - 2*p.thickness)/p.size[X],
                 (p.size[Y] - 2*p.thickness)/p.size[Y],
                 (p.size[Z] - p.thickness)/p.size[Z]
-                )
+                ),
+            about=(0, 0, p.Skirt.height)
             )
         return (body_outer, body_mid, body_inner)
 
@@ -411,7 +444,7 @@ class Keycap(Part):
             * extrude(
                 RectangleRounded(
                     *p.Stem.boss_size,
-                    radius=p.Stem.boss_size[Y]/2
+                    radius=p.Stem.boss_size[Y]/2-EPS
                     ),
                 amount=BIG
                 )
@@ -430,7 +463,7 @@ class Keycap(Part):
             )
         if StemType.RIBBED in p.stem_type:
             stem += [
-                Pos(Z=p.Stem.size[Z])
+                Pos(Z=p.Stem.height)
                 * Rot(Z=i*90)
                 * Box(
                     length=BIG,
@@ -502,45 +535,32 @@ if __name__ == "__main__":
     parser.add_argument(
         "--stl",
         nargs='?',
-        const="keycap.stl"
+        const="keycap"
         )
     parser.add_argument(
         "--step",
         nargs='?',
-        const="keycap.step"
+        const="keycap"
         )
     args = parser.parse_args()
+    path = os.path.dirname(__file__)
     if args.config is None:
-        keycap = Keycap()
+        parameters = KeycapSetParameters.from_yaml_file(
+            os.path.join(path, "config", "planck_set.yaml")
+            ).__dict__
+        keycap_set = KeycapSet(**parameters)
     else:
-        keycap = Keycap(config=args.config[0])
+        keycap = KeycapSet(config=args.config[0])
     if args.stl is not None:
-        export_stl(
-            to_export=keycap,
-            file_path=args.stl
-            )
+        for keycap in keycap_set:
+            export_stl(
+                to_export=keycap,
+                file_path=f"{args.stl}_{keycap.label}.stl"
+                )
     if args.step is not None:
-        export_step(
-        to_export=keycap,
-        file_path=args.step
-        )
-    keycap_set = KeycapSet(
-        columns=[-1, 0, 0, 0, 0, 1, -1, 0, 0, 0, 0, 1],
-        rows=[2, 3, 4, 5, 1, 2],
-        legends=[
-            ["",        "",     "",     "",     "",     "¶"],
-            ['"\n'+"'", "A",    "X",    "",     "",     ""],
-            ["W",       "R",    "V",    "◉",    "",     ""],
-            ["F",       "S",    "C",    "⎋",    "",     ""],
-            ["P",       "T",    "D",    "⎈",    "⇤",    "␣"],
-            ["B",       "G",    "Q",    "",     "",     "#"],
-            ["J",       "M",    "Z",    "",     "",     "◇"],
-            ["L",       "N",    "H",    "⌥",    "⇥",    "⌫"],
-            ["U",       "E",    "K",    "⌦",    "",     ""],
-            ["Y",       "I",    ";\n,", "≡",    "",     ""],
-            ["-\n—",    "O",    ":\n.", "",     "",     ""],
-            ["",        "",     "",     "",     "",     "⇧"],
-            ],
-        require_legend=True
-        )
+        for keycap in keycap_set:
+            export_step(
+                to_export=keycap,
+                file_path=f"{args.step}_{keycap.label}.step"
+                )
     show(keycap_set)

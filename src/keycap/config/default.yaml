@@ -19,12 +19,14 @@ clearance: 1
 # Color of the keycap.
 # color: "CornflowerBlue"
 color: 0x663399 #RebeccaPurple
+# Keycap size in spacing units.
+dimensions: [1, 1]
 # Label of the keycap when viewed in OCP_VSCode.
 label: Keycap
 # Keycap material for informational purposes.
 material: PBT
 # X- and Y- dimensions of the base of the keycap.
-spacing: *spacing_mx
+spacing: *spacing_choc
 # Type of stem. See stem_types above for options.
 stem_type: *stem_mx_ribbed
 # Thickness of keycap shell.
@@ -69,18 +71,20 @@ Top:
   # Y-axis as a fraction of the top's Y size (immediately above). The third
   # defines the height of the point as a fraction of center height.
   center_points: [
-    [0, -0.4, 1],
-    [0, -0.33, 1.1],
-    [0, 0, 1],
-    [0, 0.33, 1.1],
-    [0, 0.4, 1]
+    [0,   0.1,    1   ],
+    [0,   0.17,   1.1 ],
+    [0,   0,      1   ],
+    [0,   0.17,   1.1 ],
+    [0,   0.1,    1   ]
     ]
+  center_point_references: [-1, -1, 0, 1, 1]
   # Tangent angles for the spline (see above).
   center_tangents: [30, 0, 0, 0, -30]
   # Angle of the side ridges.
   ridge_angle: 45
+  # Height (sagitta) of side ridge.
+  ridge_height: 1
   # Position of the side ridges relative to the keycap size.
-  ridge_position: [0.35, 0, 1.2]
-  # Size of the side ridges. First value is the length of the arc relative to
-  # the keycap depth and the second is the sagitta of the arc in mm.
-  ridge_size: [0.35, 1]
+  ridge_inset: 0.15
+  #
+  ridge_position_z: 1.2
