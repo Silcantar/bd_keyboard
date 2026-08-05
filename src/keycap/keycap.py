@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import IntFlag, StrEnum, auto
+from math import floor
 from os import PathLike
 
 from build123d import *
@@ -61,7 +62,7 @@ class Top:
     ridge_position_z: float
 
 @dataclass
-class KeycapParameters(YAMLWizard):
+class KeycapProfile(YAMLWizard):
     clearance: float
     color: color
     dimensions: vector[2]
@@ -75,12 +76,16 @@ class KeycapParameters(YAMLWizard):
     Top: Top
 
 @dataclass
-class KeycapSetParameters(YAMLWizard):
-    config: list[str]
-    columns: list[int]
-    rows: list[int]
-    legends: list[list[str]]
-    require_legend: bool
+class KeycapParameters:
+    legend: str
+    position: vector[2]
+    profile: tuple[int, int]
+    size: vector[2] = (1, 1)
+
+@dataclass
+class KeycapSet(YAMLWizard):
+    profile_path: str
+    keys: list[KeycapParameters]
 
 @dataclass
 class StemMX:
@@ -99,89 +104,84 @@ class StemChoc:
     spacing: float = 5.7
     size: vector[2] = (1.2, 3)
 
-def KeycapSet(
-    config: os.Pathlike = None,
-    columns: list[int] = [0],
-    rows: list[int] = [3],
-    legends: str | list[list[str]] = None,
-    require_legend: bool = False
+def keycap_set(
+    keys: list[KeycapParameters],
+    profile_path: os.Pathlike = None
     ) -> list[Part]:
-    if config is None:
-        parameter_file = os.path.join(
+    if profile_path is None:
+        profile_file = os.path.join(
             os.path.dirname(__file__),
-            "config",
+            "profiles",
             "default.yaml"
             )
     else:
-        parameter_file = os.path.join(
+        profile_file = os.path.join(
             os.path.dirname(__file__),
-            *config
+            "profiles",
+            profile_path
             )
-    parameters = KeycapParameters.from_yaml_file(parameter_file)
-    parameters.Stem = (
-        StemChoc() if StemType.CHOC in parameters.stem_type
+    profile = KeycapProfile.from_yaml_file(profile_file)
+    profile.Stem = (
+        StemChoc() if StemType.CHOC in profile.stem_type
         else StemMX()
         )
-    key_count = len(columns) * len(rows)
-    if legends is None or isinstance(legends, str):
-        legends = [[legends] * len(columns)] * len(rows)
     keycaps: list[Part] = []
-    for (i, column) in enumerate(columns):
-        for (j, row) in enumerate(rows):
-            if (
-                require_legend
-                and (legends[j][i] == "" or legends[j][i] is None)
-                ):
-                continue
-            print_legend = (
-                legends[j][i].replace('\n', ' ')
-                if isinstance(legends[j][i], str)
-                else legends[j][i]
+
+    for key in keys:
+        column = key.profile[X]
+        row = key.profile[Y]
+        print_legend = (
+            key.legend.replace('\n', ' ')
+            if isinstance(key.legend, str)
+            else key.legend
+            )
+        print(
+            bcolors.OKBLUE
+            + f"Building keycap "
+            + f"R{2 - floor(key.position[Y])}C{floor(key.position[X]) + 6} — "
+            + f"legend: {print_legend}."
+            + bcolors.ENDC
+            )
+        p = deepcopy(profile)
+        p.Top.angles = (
+            (
+                profile.Top.angles[X]
+                - (row-HOME_ROW)*profile.Top.angle_increments[X]
+                ),
+            (
+                profile.Top.angles[Y]
+                - column*profile.Top.angle_increments[Y]
                 )
-            print(
-                bcolors.OKBLUE
-                + f"Building keycap R{row}C{i} — "
-                + f"legend: {print_legend}."
-                + bcolors.ENDC
+            )
+        p.Top.offsets = (
+            (
+                profile.Top.offsets[X]
+                - column*profile.Top.offset_increments[X]
+                ),
+            (
+                profile.Top.offsets[Y]
+                + (row-HOME_ROW)*profile.Top.offset_increments[Y]
                 )
-            p = deepcopy(parameters)
-            p.Top.angles = (
-                (
-                    parameters.Top.angles[X]
-                    - (row-HOME_ROW)*parameters.Top.angle_increments[X]
-                    ),
-                (
-                    parameters.Top.angles[Y]
-                    - column*parameters.Top.angle_increments[Y]
-                    )
-                )
-            p.Top.offsets = (
-                (
-                    parameters.Top.offsets[X]
-                    - column*parameters.Top.offset_increments[X]
-                    ),
-                (
-                    parameters.Top.offsets[Y]
-                    + (row-HOME_ROW)*parameters.Top.offset_increments[Y]
-                    )
-                )
-            height_increments = (
-                abs((row-HOME_ROW)*sind(p.Top.angles[X])) * p.spacing[X] / 2,
-                abs(column*sind(p.Top.angles[Y])) * p.spacing[Y] / 2
-                )
-            p.height = (
-                parameters.Stem.height
-                + parameters.thickness
-                + sum(height_increments)
-                )
-            keycaps.append(
-                Pos(
-                    (i - len(columns)/2 + 0.5)*p.dimensions[X]*p.spacing[X],
-                    -(j - len(rows)/2 + 0.5)*p.dimensions[Y]*p.spacing[Y]
-                    )
-                * Keycap(legend=legends[j][i], parameters=p)
-                )
-            keycaps[-1].label = f"Keycap R{row}C{i}"
+            )
+        height_increments = (
+            abs((row-HOME_ROW)*sind(p.Top.angles[X])) * p.spacing[X] / 2,
+            abs(column*sind(p.Top.angles[Y])) * p.spacing[Y] / 2
+            )
+        p.height = (
+            profile.Stem.height
+            + profile.thickness
+            + sum(height_increments)
+            )
+        p.dimensions = key.size
+        keycaps.append(
+            Pos(key.position[X]*p.spacing[X], key.position[Y]*p.spacing[Y])
+            * Keycap(legend=key.legend, profile=p)
+            )
+        keycaps[-1].label = (
+            f"Keycap "
+            + f"R{floor(key.position[Y]) + 2}"
+            + f"C{floor(key.position[X]) + 6}"
+            )
     return keycaps
 
 class Keycap(Part):
@@ -193,22 +193,22 @@ class Keycap(Part):
         config: os.PathLike = None,
         label: str = None,
         legend: str = None,
-        parameters: KeycapParameters = None,
+        profile: KeycapProfile = None,
         **kwargs
         ):
         if config is None:
-            parameter_file = os.path.join(
+            config_file = os.path.join(
                 os.path.dirname(__file__),
-                "config",
+                "profiles",
                 "default.yaml"
                 )
         else:
-            parameter_file = config
-        if parameters is None:
-            self.parameters = KeycapParameters.from_yaml_file(parameter_file)
+            config_file = config
+        if profile is None:
+            self.profile = KeycapProfile.from_yaml_file(config_file)
         else:
-            self.parameters = parameters
-        p = self.parameters
+            self.profile = profile
+        p = self.profile
         try:
             p.Stem
         except AttributeError:
@@ -234,7 +234,7 @@ class Keycap(Part):
         self.material = p.material
 
     def _build(self) -> list[Part]:
-        p = self.parameters
+        p = self.profile
         (body_outer, body_mid, body_inner) = self._body()
         stem_intersector = (
             body_mid
@@ -280,7 +280,7 @@ class Keycap(Part):
 
     def _body(self, solid: bool = False) -> tuple[Part, Part, Part]:
         PROFILE_COUNT = 5
-        p = self.parameters
+        p = self.profile
         guide_length = p.size[Y]/2 - p.spacing[Y]*p.Top.ridge_inset
         top_guides = [
             Pos(
@@ -409,7 +409,7 @@ class Keycap(Part):
         return (body_outer, body_mid, body_inner)
 
     def _legend(self) -> Part:
-        p = self.parameters
+        p = self.profile
         font_style_map = {
             "regular": FontStyle.REGULAR,
             "bold": FontStyle.BOLD,
@@ -437,7 +437,7 @@ class Keycap(Part):
         return legend
 
     def _stem_choc(self) -> Part:
-        p = self.parameters
+        p = self.profile
         boss_location = Pos(Z=p.Stem.height)
         stem = (
             boss_location
@@ -476,7 +476,7 @@ class Keycap(Part):
         return stem
 
     def _stem_MX(self) -> Part:
-        p = self.parameters
+        p = self.profile
         stem = Cylinder(
             radius=p.Stem.radius,
             height=BIG,
@@ -521,16 +521,16 @@ if __name__ == "__main__":
     from ocp_vscode import show
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-c",
         "-p",
-        "--config",
-        "--parameters",
-        nargs=1,
+        "--profile",
+        nargs="?",
+        const="default.yaml"
         )
     parser.add_argument(
         "-s",
         "--set",
-        nargs='?'
+        nargs="?",
+        const="planck.yaml"
         )
     parser.add_argument(
         "--stl",
@@ -544,23 +544,28 @@ if __name__ == "__main__":
         )
     args = parser.parse_args()
     path = os.path.dirname(__file__)
-    if args.config is None:
-        parameters = KeycapSetParameters.from_yaml_file(
-            os.path.join(path, "config", "planck_set.yaml")
+    if args.set is not None:
+        config = KeycapSet.from_yaml_file(
+            os.path.join(path, "sets", args.set)
             ).__dict__
-        keycap_set = KeycapSet(**parameters)
+        keycaps = keycap_set(**config)
+    elif args.profile is not None:
+        config = KeycapProfile.from_yaml_file(
+            os.path.join(path, "profiles", args.profile)
+            ).__dict__
+        keycaps = Keycap(config=config)
     else:
-        keycap = KeycapSet(config=args.config[0])
+        keycaps = Keycap()
     if args.stl is not None:
-        for keycap in keycap_set:
+        for keycap in keycaps:
             export_stl(
                 to_export=keycap,
                 file_path=f"{args.stl}_{keycap.label}.stl"
                 )
     if args.step is not None:
-        for keycap in keycap_set:
+        for keycap in keycaps:
             export_step(
                 to_export=keycap,
                 file_path=f"{args.step}_{keycap.label}.step"
                 )
-    show(keycap_set)
+    show(keycaps)
