@@ -179,8 +179,8 @@ def keycap_set(
             )
         keycaps[-1].label = (
             f"Keycap "
-            + f"R{floor(key.position[Y]) + 2}"
-            + f"C{floor(key.position[X]) + 6}"
+            + f"R{abs(floor(key.position[Y]))}"
+            + f"C{floor(key.position[X])}"
             )
     return keycaps
 
@@ -535,12 +535,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--stl",
         nargs='?',
-        const="keycap"
+        const=""
         )
     parser.add_argument(
         "--step",
         nargs='?',
-        const="keycap"
+        const=""
         )
     args = parser.parse_args()
     path = os.path.dirname(__file__)
@@ -553,19 +553,37 @@ if __name__ == "__main__":
         config = KeycapProfile.from_yaml_file(
             os.path.join(path, "profiles", args.profile)
             ).__dict__
-        keycaps = Keycap(config=config)
+        keycaps = [Keycap(config=config)]
     else:
-        keycaps = Keycap()
+        keycaps = [Keycap()]
     if args.stl is not None:
         for keycap in keycaps:
+            print(f"Exporting STL for {keycap.label}.")
             export_stl(
                 to_export=keycap,
-                file_path=f"{args.stl}_{keycap.label}.stl"
+                file_path=os.path.join(
+                    path,
+                    "output",
+                    "_".join([
+                        args.set.replace(".yaml", ""),
+                        # args.stl,
+                        keycap.label.replace(" ", "_")
+                        ]) + ".stl"
+                    )
                 )
     if args.step is not None:
         for keycap in keycaps:
+            print(f"Exporting STEP for {keycap.label}.")
             export_step(
                 to_export=keycap,
-                file_path=f"{args.step}_{keycap.label}.step"
+                file_path=os.path.join(
+                    path,
+                    "output",
+                    "_".join([
+                        args.set.replace(".yaml", ""),
+                        # args.step,
+                        keycap.label.replace(" ", "_")
+                        ]) + ".step"
+                    )
                 )
-    show(keycaps)
+    show(*keycaps)
