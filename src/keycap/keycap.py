@@ -112,7 +112,7 @@ def keycap_set(
         profile_file = os.path.join(
             os.path.dirname(__file__),
             "profiles",
-            "default.yaml"
+            "steganographer.yaml"
             )
     else:
         profile_file = os.path.join(
@@ -200,7 +200,7 @@ class Keycap(Part):
             config_file = os.path.join(
                 os.path.dirname(__file__),
                 "profiles",
-                "default.yaml"
+                "steganographer.yaml"
                 )
         else:
             config_file = config
@@ -524,7 +524,7 @@ if __name__ == "__main__":
         "-p",
         "--profile",
         nargs="?",
-        const="default.yaml"
+        const="steganographer.yaml"
         )
     parser.add_argument(
         "-s",

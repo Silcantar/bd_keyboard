@@ -1,4 +1,4 @@
-profile_path: default.yaml
+profile_path: steganographer.yaml
 keys:
   - legend: "\u238B"
     position: [0, 0]

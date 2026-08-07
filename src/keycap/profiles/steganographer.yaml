@@ -1,4 +1,4 @@
-# Default Parameters for BD_Keyboard keycaps.
+# Default Parameters for Steganographer keycaps.
 # ---- Alias definitions ----
 legend_style_options:
   doubleshot: &doubleshot doubleshot
@@ -38,7 +38,8 @@ Legend:
   # Engraved legend depth.
   depth: 0.5
   # Legend font.
-  font: Fira Code
+  # font: Fira Code
+  font: Everson Mono
   # Font style.
   font_style: regular
   # Position of legend on keycap.

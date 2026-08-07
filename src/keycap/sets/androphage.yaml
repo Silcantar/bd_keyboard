@@ -1,4 +1,4 @@
-profile_path: default.yaml
+profile_path: steganographer.yaml
 keys:
   - legend: "\"\n'"
     position: [-6.5, 1.5]

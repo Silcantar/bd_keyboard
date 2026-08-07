@@ -1,4 +1,4 @@
-profile_path: default.yaml
+profile_path: steganographer.yaml
 keys:
   - legend: "\u21E5"
     position: [-5.5, 1.5]
@@ -127,6 +127,7 @@ keys:
     position: [0, -1.5]
     profile: [0, 2]
     size: [2, 1]
+# 1u space keys
   # - legend: " "
   #   position: [-0.5, -1.5]
   #   profile: [1, 2]
