@@ -48,18 +48,19 @@ keys:
   - legend: "\u25A0"
     position: [17.25, 0]
     profile: [0, 1]
-  # - legend: "\u232B"
-  #   position: [18.5, -1.25]
-  #   profile: [0, 1]
-  # - legend: "/"
-  #   position: [19.5, -1.25]
-  #   profile: [0, 1]
-  # - legend: "*"
-  #   position: [20.5, -1.25]
-  #   profile: [0, 1]
-  # - legend: "-"
-  #   position: [21.5, -1.25]
-  #   profile: [0, 1]
+# Optional media keys
+  - legend: "\u23EE"
+    position: [18.5, 0]
+    profile: [0, 1]
+  - legend: "\u23EF"
+    position: [19.5, 0]
+    profile: [0, 1]
+  - legend: "\u23ED"
+    position: [20.5, 0]
+    profile: [0, 1]
+  - legend: "\u23CF"
+    position: [21.5, 0]
+    profile: [0, 1]
 
   - legend: "~\n`"
     position: [0, -1.25]
@@ -126,7 +127,7 @@ keys:
     position: [21.5, -1.25]
     profile: [0, 1]
 
-  - legend: "\u21D4"
+  - legend: "\u21B9"
     position: [0.25, -2.25]
     profile: [0, 2]
     size: [1.5, 1]
